@@ -1,0 +1,91 @@
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel ShellGrass
+
+struct InputVertex
+{
+    float3 position;
+    float3 normal;
+    float2 uv;
+};
+#include "Assets/shell-grass/shaders/HLSL/triangle-data.hlsl"
+struct IndirectArgs
+{
+    uint numVerticesPerInstance;
+    uint numInstances;
+    uint startVertexIndex;
+    uint startInstanceIndex;
+};
+
+StructuredBuffer<InputVertex> _InputVertices;
+StructuredBuffer<int> _InputTriangles;
+AppendStructuredBuffer<DrawTriangle> _DrawTriangles;
+RWStructuredBuffer<IndirectArgs> _IndirectArgs;
+float4x4 _LocalToWorld;
+float3 _CamPos;
+float1 _LODMin;
+float1 _LODMax;
+float1 _LODFactor;
+float1 _Offset;
+int _Layers;
+int _TriangleCount;
+
+DrawVertex GetVertex(InputVertex v){
+    DrawVertex o;
+    o.position = mul(_LocalToWorld, float4(v.position.xyz, 1.0)).xyz;
+    o.normal = mul(_LocalToWorld, float4(v.normal.xyz, 0.0)).xyz;
+    o.uv = v.uv;
+    return o;
+}
+
+DrawVertex ExtrudeVertex(DrawVertex v, float offset, float1 h){
+    DrawVertex o;
+    o.position = v.position + v.normal * offset;
+    o.normal = v.normal;
+    o.uv = v.uv;
+    o.height = h;
+    return o;
+}
+float GetDistanceFromCamera(DrawVertex v){
+    return distance(v.position.xyz, _CamPos);
+}
+int GetLayersNum(DrawVertex a, DrawVertex b, DrawVertex c){
+    float dA = GetDistanceFromCamera(a);
+    float dB = GetDistanceFromCamera(b);
+    float dC = GetDistanceFromCamera(c);
+
+    float d = min(dA, min(dB, dC));
+    d = 1 - smoothstep(_LODMin, _LODMax, d);
+    d = pow(abs(d), _LODFactor);
+    return max(1, ceil(d * _Layers));
+}
+
+[numthreads(32,1,1)]
+void ShellGrass(uint3 id : SV_DispatchThreadID)
+{
+    if ((int)id.x >= _TriangleCount) return;
+
+    int triStart = id.x * 3;
+    DrawVertex drawVertices[3];
+    DrawTriangle tri = (DrawTriangle)0;
+
+    [unroll]
+    for (int i = 0; i < 3; i++)
+    {
+        drawVertices[i] = GetVertex(_InputVertices[_InputTriangles[(triStart + i)]]);
+        tri.vertices[i] = drawVertices[i];
+    }
+
+    int numLayers = GetLayersNum(drawVertices[0], drawVertices[1], drawVertices[2]);
+    for (int k = 0; k < numLayers; k++)
+    {
+        float factor = (float)(k) / (numLayers);
+        DrawTriangle tri = (DrawTriangle)0;
+        [unroll]
+        for (int j = 0; j < 3; j++)
+        {
+            tri.vertices[j] = ExtrudeVertex(drawVertices[j], _Offset * factor, factor);
+        }
+        _DrawTriangles.Append(tri);
+    }
+    InterlockedAdd(_IndirectArgs[0].numVerticesPerInstance, 3 * numLayers);
+}
