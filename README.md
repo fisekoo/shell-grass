@@ -6,6 +6,6 @@ Shell based interactive grass system made with compute shaders for Unity URP. Th
 ![shellgrass2gif](https://github.com/fisekoo/shell-grass/assets/82342866/99684a10-39b6-457e-9738-d0d101fe83ca)
 
 #### ◤Key Features :bulb:
-👣 Interactable: Objects can interact with grasses.
-💡 Dynamic Lights: Grasses use realtime lights on the scene.
-🎥 LOD Supported: With LOD support grasses don't render far grasses.
++ 👣 Interactable: Objects can interact with grasses.
++ 💡 Dynamic Lights: Grasses use realtime lights on the scene.
++ 🎥 LOD Supported: With LOD support grasses don't render far grasses.
